@@ -13,8 +13,6 @@ import { toast } from "sonner";
 import { LogOut, User, CheckCircle, AlertCircle, Shield, BarChart3, Clock, Printer, FileText, ArrowLeft, Download } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { OperationType, handleFirestoreError, cn } from "../lib/utils";
-// @ts-ignore
-import html2pdf from "html2pdf.js";
 
 interface Student {
   registrationNumber: string;
@@ -518,6 +516,7 @@ export default function Dashboard() {
 
               <div className="mt-8 sm:mt-12 flex flex-col sm:flex-row gap-3 sm:gap-4 print:hidden">
                 <button 
+                  type="button"
                   onClick={() => setShowReceipt(false)}
                   className="flex-1 px-6 py-4 rounded-xl font-bold uppercase tracking-widest text-text-muted hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
                 >
@@ -525,7 +524,8 @@ export default function Dashboard() {
                   Close
                 </button>
                 <button 
-                  onClick={() => {
+                  type="button"
+                  onClick={async () => {
                     const element = document.getElementById('receipt-content');
                     if (!element) return;
                     
@@ -537,7 +537,14 @@ export default function Dashboard() {
                       jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
                     };
                     
-                    html2pdf().set(opt).from(element).save();
+                    try {
+                      const html2pdfModule = await import('html2pdf.js');
+                      const html2pdf = html2pdfModule.default || html2pdfModule;
+                      html2pdf().set(opt).from(element).save();
+                    } catch (error) {
+                      console.error("PDF generation failed:", error);
+                      window.print();
+                    }
                   }}
                   className="flex-1 btn-primary flex items-center justify-center gap-2"
                 >
