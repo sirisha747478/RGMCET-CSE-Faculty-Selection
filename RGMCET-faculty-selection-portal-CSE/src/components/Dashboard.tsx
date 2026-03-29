@@ -239,7 +239,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background text-text p-4 sm:p-6 flex flex-col">
-      <div className="max-w-7xl mx-auto w-full space-y-4 sm:space-y-8 relative z-10">
+      <div className="max-w-7xl mx-auto w-full space-y-4 sm:space-y-8 relative z-10 print:hidden">
         {/* Header */}
         <header className="professional-card p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-6">
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto">
@@ -452,13 +452,13 @@ export default function Dashboard() {
       {/* Receipt Modal */}
       <AnimatePresence>
         {showReceipt && student && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[60] p-4 overflow-y-auto">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[60] p-4 overflow-y-auto print:bg-transparent print:backdrop-blur-none print:p-0 print:static print:block">
             <motion.div 
               id="receipt-content"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-2xl w-full bg-white p-6 sm:p-12 rounded-3xl relative shadow-2xl border border-border print:shadow-none print:border-none my-auto"
+              className="max-w-2xl w-full bg-white p-6 sm:p-12 rounded-3xl relative shadow-2xl border border-border print:shadow-none print:border-none my-auto print:p-0 print:m-0"
             >
               <div className="flex flex-col items-center text-center mb-8 sm:mb-12 print:mb-8">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-green-100 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 print:hidden">
@@ -514,38 +514,18 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="mt-8 sm:mt-12 flex flex-col sm:flex-row gap-3 sm:gap-4 print:hidden">
+              <div className="mt-8 sm:mt-12 flex flex-col sm:flex-row gap-3 sm:gap-4 print:hidden" data-html2canvas-ignore="true">
                 <button 
                   type="button"
                   onClick={() => setShowReceipt(false)}
                   className="flex-1 px-6 py-4 rounded-xl font-bold uppercase tracking-widest text-text-muted hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
                 >
                   <ArrowLeft size={18} />
-                  Close
+                  Back
                 </button>
                 <button 
                   type="button"
-                  onClick={async () => {
-                    const element = document.getElementById('receipt-content');
-                    if (!element) return;
-                    
-                    const opt = {
-                      margin:       0.5,
-                      filename:     `${student.registrationNumber}_receipt.pdf`,
-                      image:        { type: 'jpeg' as const, quality: 0.98 },
-                      html2canvas:  { scale: 2, useCORS: true },
-                      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
-                    };
-                    
-                    try {
-                      const html2pdfModule = await import('html2pdf.js');
-                      const html2pdf = html2pdfModule.default || html2pdfModule;
-                      html2pdf().set(opt).from(element).save();
-                    } catch (error) {
-                      console.error("PDF generation failed:", error);
-                      window.print();
-                    }
-                  }}
+                  onClick={() => window.print()}
                   className="flex-1 btn-primary flex items-center justify-center gap-2"
                 >
                   <Download size={18} />
