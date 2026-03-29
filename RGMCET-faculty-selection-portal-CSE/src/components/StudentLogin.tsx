@@ -210,37 +210,18 @@ export default function StudentLogin() {
     }
   };
 
-  const handlePrint = async () => {
-    const element = document.getElementById('receipt-content');
-    if (!element) return;
-    
-    const opt = {
-      margin:       0.5,
-      filename:     `${submittedStudent.registrationNumber}_receipt.pdf`,
-      image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
-    };
-    
-    try {
-      // Dynamically import to avoid Vite/SSR issues
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = html2pdfModule.default || html2pdfModule;
-      html2pdf().set(opt).from(element).save();
-    } catch (error) {
-      console.error("PDF generation failed:", error);
-      window.print(); // Fallback to browser print
-    }
+  const handlePrint = () => {
+    window.print();
   };
 
   if (submittedStudent) {
     return (
-      <div className="min-h-screen bg-background text-text flex items-center justify-center p-4 sm:p-6">
+      <div className="min-h-screen bg-background text-text flex items-center justify-center p-4 sm:p-6 print:bg-white print:p-0">
         <motion.div 
           id="receipt-content"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="max-w-2xl w-full professional-card p-6 sm:p-12 relative z-10 print:shadow-none print:border-none print:p-0"
+          className="max-w-2xl w-full professional-card p-6 sm:p-12 relative z-10 print:shadow-none print:border-none print:p-0 print:m-0"
         >
           <div className="flex flex-col items-center text-center mb-8 sm:mb-12 print:mb-8">
             <div className="w-16 h-16 sm:w-20 sm:h-20 bg-green-100 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 print:hidden">
@@ -296,12 +277,14 @@ export default function StudentLogin() {
             </div>
           </div>
 
-          <div className="mt-8 sm:mt-12 flex flex-col sm:flex-row gap-3 sm:gap-4 print:hidden">
+          <div className="mt-8 sm:mt-12 flex flex-col sm:flex-row gap-3 sm:gap-4 print:hidden" data-html2canvas-ignore="true">
             <button 
               type="button"
               onClick={() => {
                 setSubmittedStudent(null);
-                auth.signOut();
+                auth.signOut().then(() => {
+                  window.location.href = "/";
+                });
               }}
               className="flex-1 px-6 py-4 rounded-xl font-bold uppercase tracking-widest text-text-muted hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
             >
