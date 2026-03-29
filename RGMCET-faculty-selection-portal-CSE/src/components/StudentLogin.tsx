@@ -283,7 +283,7 @@ export default function StudentLogin() {
               onClick={() => {
                 setSubmittedStudent(null);
                 auth.signOut().then(() => {
-                  window.location.href = "/";
+                  window.location.href = "/student/login";
                 });
               }}
               className="flex-1 px-6 py-4 rounded-xl font-bold uppercase tracking-widest text-text-muted hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
