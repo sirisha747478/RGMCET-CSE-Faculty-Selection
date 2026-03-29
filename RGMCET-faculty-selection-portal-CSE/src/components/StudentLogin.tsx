@@ -8,8 +8,6 @@ import bcrypt from "bcryptjs";
 import { ArrowLeft, GraduationCap, AlertCircle, CheckCircle, Download, Printer, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { OperationType, handleFirestoreError } from "../lib/utils";
-// @ts-ignore
-import html2pdf from "html2pdf.js";
 
 export default function StudentLogin() {
   const [regNo, setRegNo] = useState("");
@@ -212,7 +210,7 @@ export default function StudentLogin() {
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     const element = document.getElementById('receipt-content');
     if (!element) return;
     
@@ -224,7 +222,15 @@ export default function StudentLogin() {
       jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
     };
     
-    html2pdf().set(opt).from(element).save();
+    try {
+      // Dynamically import to avoid Vite/SSR issues
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default || html2pdfModule;
+      html2pdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      window.print(); // Fallback to browser print
+    }
   };
 
   if (submittedStudent) {
@@ -292,13 +298,18 @@ export default function StudentLogin() {
 
           <div className="mt-8 sm:mt-12 flex flex-col sm:flex-row gap-3 sm:gap-4 print:hidden">
             <button 
-              onClick={() => setSubmittedStudent(null)}
+              type="button"
+              onClick={() => {
+                setSubmittedStudent(null);
+                auth.signOut();
+              }}
               className="flex-1 px-6 py-4 rounded-xl font-bold uppercase tracking-widest text-text-muted hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
             >
               <ArrowLeft size={18} />
               Back
             </button>
             <button 
+              type="button"
               onClick={handlePrint}
               className="flex-1 btn-primary flex items-center justify-center gap-2"
             >
