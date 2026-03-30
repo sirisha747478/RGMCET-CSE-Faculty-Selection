@@ -203,7 +203,16 @@ export default function StudentLogin() {
       if (error.code === 'auth/unauthorized-domain') {
         toast.error("Domain not authorized. Please add 'localhost' to Authorized Domains in Firebase Console.");
       } else {
-        toast.error(error.message || "Login failed.");
+        try {
+          const parsed = JSON.parse(error.message);
+          if (parsed && parsed.error) {
+            // Error was already handled and toasted by handleFirestoreError
+            return;
+          }
+        } catch (e) {
+          // Not a JSON error string, toast it normally
+          toast.error(error.message || "Login failed.");
+        }
       }
     } finally {
       setLoading(false);
@@ -283,7 +292,7 @@ export default function StudentLogin() {
               onClick={() => {
                 setSubmittedStudent(null);
                 auth.signOut().then(() => {
-                  window.location.href = "/student/login";
+                  navigate("/student/login");
                 });
               }}
               className="flex-1 px-6 py-4 rounded-xl font-bold uppercase tracking-widest text-text-muted hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
