@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { auth, db } from "../firebase";
 import { 
   collection, 
-  onSnapshot, 
   doc, 
   getDoc, 
   getDocs,
@@ -13,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { LogOut, User, CheckCircle, AlertCircle, Shield, BarChart3, Clock, Printer, FileText, ArrowLeft, Download } from "lucide-react";
+import { RefreshCw, LogOut, User, CheckCircle, AlertCircle, Shield, BarChart3, Clock, Printer, FileText, ArrowLeft, Download } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { OperationType, handleFirestoreError, cn } from "../lib/utils";
 
@@ -53,14 +52,65 @@ export default function Dashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
 
+  const fetchStudentData = async (regNo: string) => {
+    try {
+      const studentRef = doc(db, "students", regNo);
+      const snap = await getDoc(studentRef);
+      if (snap.exists()) {
+        const data = snap.data() as Student;
+        setStudent(data);
+        setSelections(data.selections || {});
+      } else {
+        toast.error("Student record not found.");
+      }
+    } catch (err) {
+      if (auth.currentUser) {
+        handleFirestoreError(err, OperationType.GET, `students/${regNo}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchStaticData = async (group: string) => {
+    try {
+      // Fetch subjects (one-time read if empty)
+      if (subjects.length === 0) {
+        const subSnap = await getDocs(collection(db, "subjects"));
+        setSubjects(subSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
+      }
+
+      // Fetch faculty for the specific group (needs periodic refresh for student counts)
+      const facQuery = query(collection(db, "faculty"), where("group", "==", group));
+      const facSnap = await getDocs(facQuery);
+      setFaculty(facSnap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+    } catch (err) {
+      console.error("Error fetching static data:", err);
+      if (auth.currentUser) {
+        handleFirestoreError(err, OperationType.LIST, "static_data");
+      }
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (!student?.registrationNumber) return;
+    setRefreshing(true);
+    await Promise.all([
+      fetchStudentData(student.registrationNumber),
+      fetchStaticData(student.group)
+    ]);
+    setRefreshing(false);
+    toast.success("Data refreshed");
+  };
+
   useEffect(() => {
-    let unsubStudent: (() => void) | null = null;
+    let regNoToFetch = "";
 
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       if (!user || !user.uid) {
-        if (unsubStudent) unsubStudent();
         navigate("/");
         return;
       }
@@ -75,34 +125,15 @@ export default function Dashboard() {
           userDoc = await getDoc(userDocRef);
         }
 
-        let regNo = userDoc.data()?.registrationNumber;
+        regNoToFetch = userDoc.data()?.registrationNumber;
 
-        if (!regNo) {
+        if (!regNoToFetch) {
           toast.error("Account not linked to a student record.");
           setLoading(false);
           return;
         }
 
-        const studentRef = doc(db, "students", regNo);
-        unsubStudent = onSnapshot(studentRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data() as Student;
-            setStudent(data);
-            setSelections(data.selections || {});
-          } else {
-            toast.error("Student record not found.");
-          }
-          setLoading(false);
-        }, (err) => {
-          if (auth.currentUser) {
-            handleFirestoreError(err, OperationType.GET, `students/${regNo}`);
-          }
-          setLoading(false);
-        });
-
-        // Fetch subjects and faculty only after auth
-        // Removed onSnapshot for subjects and faculty to save quota.
-        // They will be fetched once the student's group is known.
+        await fetchStudentData(regNoToFetch);
       } catch (err) {
         console.error("Error in Dashboard auth listener:", err);
         setLoading(false);
@@ -111,34 +142,22 @@ export default function Dashboard() {
 
     return () => {
       unsubscribeAuth();
-      if (unsubStudent) unsubStudent();
     };
   }, [navigate]);
 
   // Fetch static data (subjects and faculty) once the student's group is known
   useEffect(() => {
     if (!student?.group) return;
+    fetchStaticData(student.group);
 
-    const fetchStaticData = async () => {
-      try {
-        // Fetch subjects (one-time read)
-        const subSnap = await getDocs(collection(db, "subjects"));
-        setSubjects(subSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
+    // Auto-refresh every 10 seconds
+    const intervalId = setInterval(() => {
+      fetchStaticData(student.group);
+      fetchStudentData(student.registrationNumber);
+    }, 10000);
 
-        // Fetch faculty for the specific group (one-time read)
-        const facQuery = query(collection(db, "faculty"), where("group", "==", student.group));
-        const facSnap = await getDocs(facQuery);
-        setFaculty(facSnap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
-      } catch (err) {
-        console.error("Error fetching static data:", err);
-        if (auth.currentUser) {
-          handleFirestoreError(err, OperationType.LIST, "static_data");
-        }
-      }
-    };
-
-    fetchStaticData();
-  }, [student?.group]);
+    return () => clearInterval(intervalId);
+  }, [student?.group, student?.registrationNumber]);
 
   // Filtered faculty based on student's group (no longer needed client-side, but kept for safety)
   const filteredFaculty = faculty;
@@ -283,6 +302,15 @@ export default function Dashboard() {
               <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">System Status</span>
               <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Secure</span>
             </div>
+            <button 
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2.5 sm:p-3 bg-gray-50 hover:bg-gray-100 text-text-muted hover:text-primary rounded-xl transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest border border-border disabled:opacity-50"
+              title="Refresh Data"
+            >
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+              <span className="hidden lg:inline">Refresh</span>
+            </button>
             <button 
               onClick={() => auth.signOut()}
               className="p-2.5 sm:p-3 bg-gray-50 hover:bg-red-50 text-text-muted hover:text-red-600 rounded-xl transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest border border-border"
