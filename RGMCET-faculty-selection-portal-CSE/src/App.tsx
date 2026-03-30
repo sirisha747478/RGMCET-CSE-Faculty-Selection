@@ -42,6 +42,7 @@ export default function App() {
             userDoc = await getDoc(userDocRef);
           } catch (err) {
             handleFirestoreError(err, OperationType.GET, `users/${user.uid}`);
+            setLoading(false);
             return;
           }
           
