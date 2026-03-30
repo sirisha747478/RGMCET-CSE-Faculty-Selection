@@ -271,6 +271,7 @@ export default function Admin() {
           if (auth.currentUser) {
             handleFirestoreError(err, OperationType.LIST, "faculty");
           }
+          setLoading(false);
         });
 
         unsubSettings = onSnapshot(doc(db, "settings", "general"), (docSnap) => {
