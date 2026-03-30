@@ -62,9 +62,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     toast.error("Access Denied: Missing or insufficient permissions. Please ensure you are logged in and the database rules are deployed.", {
       duration: 8000,
     });
+    // CRITICAL: Only throw the JSON error for permission errors as required by the spec
+    throw new Error(JSON.stringify(errInfo));
+  } else if (errInfo.error.toLowerCase().includes("quota exceeded")) {
+    toast.error("The system is currently experiencing high traffic (Quota Exceeded). Please try again later.", {
+      duration: 8000,
+    });
   } else {
     toast.error("Database Error: " + errInfo.error);
   }
-  
-  throw new Error(JSON.stringify(errInfo));
 }
