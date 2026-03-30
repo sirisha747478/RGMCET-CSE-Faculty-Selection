@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { auth, db } from "../firebase";
 import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, User } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ShieldCheck, ArrowLeft } from "lucide-react";
@@ -56,6 +56,9 @@ export default function AdminLogin() {
               email: user.email,
               role: "admin"
             }, { merge: true });
+            
+            // Delete the email document to avoid duplicates
+            await deleteDoc(emailRef);
           }
         } catch (err) {
           console.error("Error checking email admin record:", err);
@@ -121,7 +124,15 @@ export default function AdminLogin() {
       } else if (error.code === 'auth/unauthorized-domain') {
         toast.error("Domain not authorized. Please add 'localhost' to Authorized Domains in Firebase Console.");
       } else {
-        toast.error(error.message || "Admin Login failed.");
+        try {
+          const parsed = JSON.parse(error.message);
+          if (parsed && parsed.error) {
+            // Error was already handled and toasted by handleFirestoreError
+            return;
+          }
+        } catch (e) {
+          toast.error(error.message || "Admin Login failed.");
+        }
       }
     } finally {
       setLoading(false);
