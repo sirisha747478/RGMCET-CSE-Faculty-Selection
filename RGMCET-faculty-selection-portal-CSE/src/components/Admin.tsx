@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from "react";
 import { db, auth } from "../firebase";
 import { 
   collection, 
-  onSnapshot, 
   doc, 
   getDoc,
   setDoc,
@@ -14,7 +13,7 @@ import {
   where
 } from "firebase/firestore";
 import { toast } from "sonner";
-import { Download, RotateCcw, Users, BarChart3, ShieldCheck, LogOut, User, CheckCircle, AlertCircle, Shield, Clock, Search, Trash2, Database, Upload } from "lucide-react";
+import { Download, RotateCcw, Users, BarChart3, ShieldCheck, LogOut, User, CheckCircle, AlertCircle, Shield, Clock, Search, Trash2, Database, Upload, RefreshCw } from "lucide-react";
 import bcrypt from "bcryptjs";
 import { useNavigate } from "react-router-dom";
 import { OperationType, handleFirestoreError } from "../lib/utils";
@@ -56,6 +55,7 @@ export default function Admin() {
   const [seeding, setSeeding] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const [studentAccessEnabled, setStudentAccessEnabled] = useState(true);
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [addingAdmin, setAddingAdmin] = useState(false);
@@ -210,18 +210,49 @@ export default function Admin() {
     `grp_${s.group}`.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const fetchAdminData = async () => {
+    try {
+      const [studentsSnap, subjectsSnap, facultySnap, settingsSnap, adminsSnap] = await Promise.all([
+        getDocs(collection(db, "students")),
+        getDocs(collection(db, "subjects")),
+        getDocs(collection(db, "faculty")),
+        getDoc(doc(db, "settings", "general")),
+        getDocs(query(collection(db, "users"), where("role", "==", "admin")))
+      ]);
+
+      setStudents(studentsSnap.docs.map(d => d.data() as Student));
+      setSubjects(subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
+      setFaculty(facultySnap.docs.map(d => ({ id: d.id, ...d.data() } as Faculty)));
+      
+      if (settingsSnap.exists()) {
+        setStudentAccessEnabled(settingsSnap.data().studentLoginEnabled !== false);
+      } else {
+        setStudentAccessEnabled(true);
+      }
+
+      setAdmins(adminsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error("Error fetching admin data:", err);
+      if (auth.currentUser) {
+        handleFirestoreError(err, OperationType.LIST, "admin_data");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchAdminData();
+    setRefreshing(false);
+    toast.success("Data refreshed");
+  };
+
   useEffect(() => {
-    let unsubStudents: (() => void) | null = null;
-    let unsubSubjects: (() => void) | null = null;
-    let unsubFaculty: (() => void) | null = null;
-    let unsubSettings: (() => void) | null = null;
-    let unsubAdmins: (() => void) | null = null;
+    let intervalId: NodeJS.Timeout;
 
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       if (!user) {
-        if (unsubStudents) unsubStudents();
-        if (unsubSubjects) unsubSubjects();
-        if (unsubFaculty) unsubFaculty();
         navigate("/admin/login");
         return;
       }
@@ -248,49 +279,13 @@ export default function Admin() {
           }
         }
 
-        unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-          setStudents(snap.docs.map(d => d.data() as Student));
-        }, (err) => {
-          if (auth.currentUser) {
-            handleFirestoreError(err, OperationType.LIST, "students");
-          }
-        });
-        
-        unsubSubjects = onSnapshot(collection(db, "subjects"), (snap) => {
-          setSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
-        }, (err) => {
-          if (auth.currentUser) {
-            handleFirestoreError(err, OperationType.LIST, "subjects");
-          }
-        });
-        
-        unsubFaculty = onSnapshot(collection(db, "faculty"), (snap) => {
-          setFaculty(snap.docs.map(d => ({ id: d.id, ...d.data() } as Faculty)));
-          setLoading(false);
-        }, (err) => {
-          if (auth.currentUser) {
-            handleFirestoreError(err, OperationType.LIST, "faculty");
-          }
-          setLoading(false);
-        });
+        await fetchAdminData();
 
-        unsubSettings = onSnapshot(doc(db, "settings", "general"), (docSnap) => {
-          if (docSnap.exists()) {
-            setStudentAccessEnabled(docSnap.data().studentLoginEnabled !== false);
-          } else {
-            setStudentAccessEnabled(true); // Default to true if not set
-          }
-        }, (err) => {
-          console.error("Error listening to settings:", err);
-        });
+        // Auto-refresh every 10 seconds
+        intervalId = setInterval(() => {
+          fetchAdminData();
+        }, 10000);
 
-        unsubAdmins = onSnapshot(query(collection(db, "users"), where("role", "==", "admin")), (snap) => {
-          setAdmins(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        }, (err) => {
-          if (auth.currentUser) {
-            handleFirestoreError(err, OperationType.LIST, "users");
-          }
-        });
       } catch (err) {
         console.error("Error in Admin auth listener:", err);
         setLoading(false);
@@ -299,11 +294,7 @@ export default function Admin() {
 
     return () => {
       unsubscribeAuth();
-      if (unsubStudents) unsubStudents();
-      if (unsubSubjects) unsubSubjects();
-      if (unsubFaculty) unsubFaculty();
-      if (unsubSettings) unsubSettings();
-      if (unsubAdmins) unsubAdmins();
+      if (intervalId) clearInterval(intervalId);
     };
   }, [navigate]);
 
@@ -706,6 +697,15 @@ export default function Admin() {
           </div>
 
           <div className="flex flex-wrap justify-center lg:justify-end gap-2 sm:gap-3 w-full lg:w-auto">
+            <button 
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2 sm:p-3 bg-gray-50 hover:bg-gray-100 text-text-muted hover:text-primary rounded-xl transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest border border-border disabled:opacity-50"
+              title="Refresh Data"
+            >
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+              <span className="hidden xl:inline">Refresh</span>
+            </button>
             <button 
               onClick={clearDatabase}
               className="p-2 sm:p-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest border border-red-100"
