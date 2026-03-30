@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { auth, db } from "../firebase";
 import { signInAnonymously } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import bcrypt from "bcryptjs";
@@ -80,7 +80,8 @@ export default function StudentLogin() {
         setLoading(true);
         try {
           const subSnap = await getDocs(collection(db, "subjects"));
-          const facSnap = await getDocs(collection(db, "faculty"));
+          const facQuery = query(collection(db, "faculty"), where("group", "==", studentData.group));
+          const facSnap = await getDocs(facQuery);
           setSubjects(subSnap.docs.map(d => ({ id: d.id, ...d.data() })));
           setFaculty(facSnap.docs.map(d => ({ id: d.id, ...d.data() })));
           setSubmittedStudent(studentData);
