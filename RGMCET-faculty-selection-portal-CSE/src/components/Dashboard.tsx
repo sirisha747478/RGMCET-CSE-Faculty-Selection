@@ -5,6 +5,9 @@ import {
   onSnapshot, 
   doc, 
   getDoc, 
+  getDocs,
+  query,
+  where,
   updateDoc, 
   runTransaction
 } from "firebase/firestore";
@@ -54,14 +57,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     let unsubStudent: (() => void) | null = null;
-    let unsubSubjects: (() => void) | null = null;
-    let unsubFaculty: (() => void) | null = null;
 
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       if (!user || !user.uid) {
         if (unsubStudent) unsubStudent();
-        if (unsubSubjects) unsubSubjects();
-        if (unsubFaculty) unsubFaculty();
         navigate("/");
         return;
       }
@@ -102,24 +101,8 @@ export default function Dashboard() {
         });
 
         // Fetch subjects and faculty only after auth
-        unsubSubjects = onSnapshot(collection(db, "subjects"), (snap) => {
-          const allSubjects = snap.docs.map(d => ({ id: d.id, ...d.data() } as Subject));
-          setSubjects(allSubjects);
-        }, (err) => {
-          if (auth.currentUser) {
-            handleFirestoreError(err, OperationType.LIST, "subjects");
-          }
-        });
-
-        unsubFaculty = onSnapshot(collection(db, "faculty"), (snap) => {
-          const allFaculty = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-          // Filter faculty by student's group if student data is available
-          setFaculty(allFaculty);
-        }, (err) => {
-          if (auth.currentUser) {
-            handleFirestoreError(err, OperationType.LIST, "faculty");
-          }
-        });
+        // Removed onSnapshot for subjects and faculty to save quota.
+        // They will be fetched once the student's group is known.
       } catch (err) {
         console.error("Error in Dashboard auth listener:", err);
         setLoading(false);
@@ -129,13 +112,36 @@ export default function Dashboard() {
     return () => {
       unsubscribeAuth();
       if (unsubStudent) unsubStudent();
-      if (unsubSubjects) unsubSubjects();
-      if (unsubFaculty) unsubFaculty();
     };
   }, [navigate]);
 
-  // Filtered faculty based on student's group
-  const filteredFaculty = faculty.filter(f => !student || f.group === student.group);
+  // Fetch static data (subjects and faculty) once the student's group is known
+  useEffect(() => {
+    if (!student?.group) return;
+
+    const fetchStaticData = async () => {
+      try {
+        // Fetch subjects (one-time read)
+        const subSnap = await getDocs(collection(db, "subjects"));
+        setSubjects(subSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
+
+        // Fetch faculty for the specific group (one-time read)
+        const facQuery = query(collection(db, "faculty"), where("group", "==", student.group));
+        const facSnap = await getDocs(facQuery);
+        setFaculty(facSnap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      } catch (err) {
+        console.error("Error fetching static data:", err);
+        if (auth.currentUser) {
+          handleFirestoreError(err, OperationType.LIST, "static_data");
+        }
+      }
+    };
+
+    fetchStaticData();
+  }, [student?.group]);
+
+  // Filtered faculty based on student's group (no longer needed client-side, but kept for safety)
+  const filteredFaculty = faculty;
 
   const handleSelect = async (subjectId: string, facultyId: string) => {
     if (!student || student.isSubmitted) return;
