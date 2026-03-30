@@ -98,6 +98,7 @@ export default function Dashboard() {
           if (auth.currentUser) {
             handleFirestoreError(err, OperationType.GET, `students/${regNo}`);
           }
+          setLoading(false);
         });
 
         // Fetch subjects and faculty only after auth
