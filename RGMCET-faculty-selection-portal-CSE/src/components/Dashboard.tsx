@@ -149,14 +149,6 @@ export default function Dashboard() {
   useEffect(() => {
     if (!student?.group) return;
     fetchStaticData(student.group);
-
-    // Auto-refresh every 10 seconds
-    const intervalId = setInterval(() => {
-      fetchStaticData(student.group);
-      fetchStudentData(student.registrationNumber);
-    }, 10000);
-
-    return () => clearInterval(intervalId);
   }, [student?.group, student?.registrationNumber]);
 
   // Filtered faculty based on student's group (no longer needed client-side, but kept for safety)
