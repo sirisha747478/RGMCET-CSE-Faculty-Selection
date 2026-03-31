@@ -281,11 +281,6 @@ export default function Admin() {
 
         await fetchAdminData();
 
-        // Auto-refresh every 10 seconds
-        intervalId = setInterval(() => {
-          fetchAdminData();
-        }, 10000);
-
       } catch (err) {
         console.error("Error in Admin auth listener:", err);
         setLoading(false);
@@ -294,7 +289,6 @@ export default function Admin() {
 
     return () => {
       unsubscribeAuth();
-      if (intervalId) clearInterval(intervalId);
     };
   }, [navigate]);
 
